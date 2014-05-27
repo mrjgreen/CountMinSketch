@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title></title>
+</head>
+<body>
+
+<script>
+
+    "use strict"
+
+    var murmurhash = function (key, seed) {
+        var remainder, bytes, h1, h1b, c1, c1b, c2, c2b, k1, i;
+
+        remainder = key.length & 3; // key.length % 4
+        bytes = key.length - remainder;
+        h1 = seed;
+        c1 = 0xcc9e2d51;
+        c2 = 0x1b873593;
+        i = 0;
+
+        while (i < bytes) {
+            k1 =
+                    ((key.charCodeAt(i) & 0xff)) |
+                    ((key.charCodeAt(++i) & 0xff) << 8) |
+                    ((key.charCodeAt(++i) & 0xff) << 16) |
+                    ((key.charCodeAt(++i) & 0xff) << 24);
+            ++i;
+
+            k1 = ((((k1 & 0xffff) * c1) + ((((k1 >>> 16) * c1) & 0xffff) << 16))) & 0xffffffff;
+            k1 = (k1 << 15) | (k1 >>> 17);
+            k1 = ((((k1 & 0xffff) * c2) + ((((k1 >>> 16) * c2) & 0xffff) << 16))) & 0xffffffff;
+
+            h1 ^= k1;
+            h1 = (h1 << 13) | (h1 >>> 19);
+            h1b = ((((h1 & 0xffff) * 5) + ((((h1 >>> 16) * 5) & 0xffff) << 16))) & 0xffffffff;
+            h1 = (((h1b & 0xffff) + 0x6b64) + ((((h1b >>> 16) + 0xe654) & 0xffff) << 16));
+        }
+
+        k1 = 0;
+
+        switch (remainder) {
+            case 3: k1 ^= (key.charCodeAt(i + 2) & 0xff) << 16;
+            case 2: k1 ^= (key.charCodeAt(i + 1) & 0xff) << 8;
+            case 1: k1 ^= (key.charCodeAt(i) & 0xff);
+
+                k1 = (((k1 & 0xffff) * c1) + ((((k1 >>> 16) * c1) & 0xffff) << 16)) & 0xffffffff;
+                k1 = (k1 << 15) | (k1 >>> 17);
+                k1 = (((k1 & 0xffff) * c2) + ((((k1 >>> 16) * c2) & 0xffff) << 16)) & 0xffffffff;
+                h1 ^= k1;
+        }
+
+        h1 ^= key.length;
+
+        h1 ^= h1 >>> 16;
+        h1 = (((h1 & 0xffff) * 0x85ebca6b) + ((((h1 >>> 16) * 0x85ebca6b) & 0xffff) << 16)) & 0xffffffff;
+        h1 ^= h1 >>> 13;
+        h1 = ((((h1 & 0xffff) * 0xc2b2ae35) + ((((h1 >>> 16) * 0xc2b2ae35) & 0xffff) << 16))) & 0xffffffff;
+        h1 ^= h1 >>> 16;
+
+        return h1 >>> 0;
+    };
+
+    /**
+     * Select family of n-hash functions
+     *
+     * TODO: Confirm distribution of these seeds will
+     * satisfy the need for pairwise independence
+     */
+    function generateRandomFunctions(n, width) {
+        var i = 0
+                , hashes = []
+                , hash;
+
+        for (i = 0; i < n; i++) {
+            var seed = Math.floor(1000000 * Math.random());
+            hash = (function (seed) {
+                return (function (item) {
+                    // mod width to fit into this CMS's range
+                    var hash = murmurhash(item.toString(), seed);
+                    return hash % width;
+                });
+            })(seed);
+
+            hashes.push(hash);
+        }
+        return hashes;
+    }
+
+
+    function CountMinSketch (delta, epsilon) {
+        delta   = delta || 0.00001;
+        epsilon = epsilon || 0.001;
+
+        // from pg. 5
+        this.depth = Math.ceil(Math.log(1.0 / delta));
+        this.width = Math.ceil(Math.exp(1) / epsilon);
+        this.hashes = generateRandomFunctions(this.depth, this.width);
+
+        this.table = new Array(this.depth);
+        for (var i = 0; i < this.depth; i++) {
+            this.table[i] = new Array(this.width);
+            for (var k = 0; k < this.table[i].length; k++) {
+                this.table[i][k] = 0;
+            }
+        }
+    }
+
+    CountMinSketch.prototype.query = function (item) {
+        var i, hash, min;
+        min = Infinity;
+        for (i = 0; i < this.depth; i++) {
+            hash = this.hashes[i](item);
+            min = Math.min(min, this.table[i][hash]);
+        }
+        return min;
+    }
+
+    CountMinSketch.prototype.update = function (item, count) {
+        var i, hash;
+        for (i = 0; i < this.depth; i++) {
+            hash = this.hashes[i](item);
+            this.table[i][hash] = this.table[i][hash] + count;
+        }
+    }
+
+    function createCountMinSketch(accuracy, probIncorrect, hashFunc) {
+        accuracy = accuracy || 0.1
+        probIncorrect = probIncorrect || 0.0001
+
+        return new CountMinSketch(probIncorrect, accuracy, hashFunc)
+    }
+
+    var sketch = createCountMinSketch();
+
+    var frequencyCounter = [];
+
+    var actualCounter = [];
+    var actualFrequencyCounter = [];
+
+    var a = 1000;
+
+    while(a--)
+    {
+        (function(){
+            var rand = Math.floor(Math.random() * 1000);
+
+            sketch.update(rand, 1);
+            var newFreq = sketch.query(rand);
+            console.log(newFreq);
+            frequencyCounter[newFreq - 1] && frequencyCounter[newFreq - 1]--;
+            frequencyCounter[newFreq] ? frequencyCounter[newFreq]++ : frequencyCounter[newFreq] = 1;
+
+            actualCounter[rand] ? actualCounter[rand]++ : actualCounter[rand] = 1;
+            var newActual = actualCounter[rand];
+            console.log(newActual);
+            console.log('----------')
+            actualFrequencyCounter[newActual - 1] && actualFrequencyCounter[newActual - 1]--;
+            actualFrequencyCounter[newActual] ? actualFrequencyCounter[newActual]++ : actualFrequencyCounter[newActual] = 1;
+        })();
+
+    }
+
+    //console.log(actualFrequencyCounter);
+    //console.log(frequencyCounter);
+
+
+</script>
+
+</body>
+</html>
