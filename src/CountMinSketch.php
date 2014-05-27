@@ -8,7 +8,7 @@ class CountMinSketch
 
     protected $hashTable;
 
-    public function __construct($HLL_P = 14, $confidence = 0.0001)
+    public function __construct($HLL_P = 16, $confidence = 0.00001)
     {
         $this->depth = ceil(log(1.0 / $confidence));
 
