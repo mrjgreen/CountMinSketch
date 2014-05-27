@@ -2,6 +2,8 @@
 
 include __DIR__ . '/../vendor/autoload.php';
 
+use SebastianBergmann\Diff\Differ;
+
 $sketch = new CountMinSketch();
 
 $frequencyCounter = [];
@@ -9,7 +11,7 @@ $frequencyCounter = [];
 $actualCounter = [];
 $actualFrequencyCounter = [];
 
-$a = 100000;
+$a = 10000;
 
 while($a--)
 {
@@ -33,6 +35,8 @@ $blah = $sketch->export();
 
 $s = new CountMinSketch();
 
-var_dump(array_diff($frequencyCounter, $actualFrequencyCounter));
+$differ = new Differ;
+
+print $differ->diff($frequencyCounter, $actualFrequencyCounter);
 
 var_dump(strlen($blah));
